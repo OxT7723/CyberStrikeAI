@@ -118,7 +118,8 @@ function wsT(key) {
         'webshell.dbSchema': '数据库结构',
         'webshell.dbLoadSchema': '加载结构',
         'webshell.dbNoSchema': '暂无数据库结构，请先加载',
-        'webshell.dbSelectTableHint': '点击表名可生成查询 SQL',
+        'webshell.dbSelectTableHint': '点击表名可展开列信息并生成查询 SQL',
+        'webshell.dbNoColumns': '暂无列信息',
         'webshell.dbResultTable': '结果表格',
         'webshell.dbClearSql': '清空 SQL',
         'webshell.dbTemplateSql': '示例 SQL',
@@ -948,6 +949,10 @@ function webshellDbQuoteIdentifier(type, name) {
     return '"' + v.replace(/"/g, '""') + '"';
 }
 
+function webshellDbQuoteLiteral(value) {
+    return "'" + String(value == null ? '' : value).replace(/'/g, "''") + "'";
+}
+
 function buildWebshellDbCommand(cfg, isTestOnly, options) {
     options = options || {};
     var type = cfg.type || 'mysql';
@@ -998,17 +1003,51 @@ function buildWebshellDbSchemaCommand(cfg) {
     var type = cfg.type || 'mysql';
     var schemaSQL = '';
     if (type === 'mysql') {
-        schemaSQL = "SELECT SCHEMA_NAME AS db_name, '' AS table_name FROM INFORMATION_SCHEMA.SCHEMATA UNION ALL SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY db_name, table_name;";
+        schemaSQL = "SELECT SCHEMA_NAME AS db_name, '' AS table_name, '' AS column_name FROM INFORMATION_SCHEMA.SCHEMATA UNION ALL SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name, '' AS column_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' UNION ALL SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name, COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS ORDER BY db_name, table_name, column_name;";
     } else if (type === 'pgsql') {
-        schemaSQL = "SELECT table_schema AS db_name, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name;";
+        schemaSQL = "SELECT table_schema AS db_name, table_name, '' AS column_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema') UNION ALL SELECT table_schema AS db_name, table_name, column_name FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY db_name, table_name, column_name;";
     } else if (type === 'sqlite') {
-        schemaSQL = "SELECT 'main' AS db_name, name AS table_name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;";
+        schemaSQL = "SELECT 'main' AS db_name, name AS table_name, '' AS column_name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' UNION ALL SELECT 'main' AS db_name, m.name AS table_name, p.name AS column_name FROM sqlite_master m JOIN pragma_table_info(m.name) p ON 1=1 WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%' ORDER BY db_name, table_name, column_name;";
     } else if (type === 'mssql') {
-        schemaSQL = "SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY TABLE_SCHEMA, TABLE_NAME;";
+        schemaSQL = "SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name, '' AS column_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' UNION ALL SELECT TABLE_SCHEMA AS db_name, TABLE_NAME AS table_name, COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS ORDER BY db_name, table_name, column_name;";
     } else {
         return { error: (wsT('webshell.dbExecFailed') || '数据库执行失败') + ': unsupported type ' + type };
     }
     return buildWebshellDbCommand(cfg, false, { sql: schemaSQL });
+}
+
+function buildWebshellDbColumnsCommand(cfg, dbName, tableName) {
+    var type = cfg.type || 'mysql';
+    var sql = '';
+    if (type === 'mysql') {
+        sql = "SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=" + webshellDbQuoteLiteral(dbName) + " AND TABLE_NAME=" + webshellDbQuoteLiteral(tableName) + " ORDER BY ORDINAL_POSITION;";
+    } else if (type === 'pgsql') {
+        sql = "SELECT column_name FROM information_schema.columns WHERE table_schema=" + webshellDbQuoteLiteral(dbName) + " AND table_name=" + webshellDbQuoteLiteral(tableName) + " ORDER BY ordinal_position;";
+    } else if (type === 'sqlite') {
+        sql = "SELECT name AS column_name FROM pragma_table_info(" + webshellDbQuoteLiteral(tableName) + ") ORDER BY cid;";
+    } else if (type === 'mssql') {
+        sql = "SELECT COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=" + webshellDbQuoteLiteral(dbName) + " AND TABLE_NAME=" + webshellDbQuoteLiteral(tableName) + " ORDER BY ORDINAL_POSITION;";
+    } else {
+        return { error: (wsT('webshell.dbExecFailed') || '数据库执行失败') + ': unsupported type ' + type };
+    }
+    return buildWebshellDbCommand(cfg, false, { sql: sql });
+}
+
+function buildWebshellDbColumnsByDatabaseCommand(cfg, dbName) {
+    var type = cfg.type || 'mysql';
+    var sql = '';
+    if (type === 'mysql') {
+        sql = "SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=" + webshellDbQuoteLiteral(dbName) + " ORDER BY TABLE_NAME, ORDINAL_POSITION;";
+    } else if (type === 'pgsql') {
+        sql = "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema=" + webshellDbQuoteLiteral(dbName) + " ORDER BY table_name, ordinal_position;";
+    } else if (type === 'sqlite') {
+        sql = "SELECT m.name AS table_name, p.name AS column_name FROM sqlite_master m JOIN pragma_table_info(m.name) p ON 1=1 WHERE m.type='table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, p.cid;";
+    } else if (type === 'mssql') {
+        sql = "SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=" + webshellDbQuoteLiteral(dbName) + " ORDER BY TABLE_NAME, ORDINAL_POSITION;";
+    } else {
+        return { error: (wsT('webshell.dbExecFailed') || '数据库执行失败') + ': unsupported type ' + type };
+    }
+    return buildWebshellDbCommand(cfg, false, { sql: sql });
 }
 
 function parseWebshellDbExecOutput(rawOutput) {
@@ -1033,6 +1072,7 @@ function parseWebshellDbSchema(rawOutput) {
     var headers = lines[0].split(delimiter).map(function (s) { return String(s || '').trim().toLowerCase(); });
     var dbIdx = headers.indexOf('db_name');
     var tableIdx = headers.indexOf('table_name');
+    var columnIdx = headers.indexOf('column_name');
     if (dbIdx < 0 || tableIdx < 0) return {};
     var schema = {};
     for (var i = 1; i < lines.length; i++) {
@@ -1040,13 +1080,115 @@ function parseWebshellDbSchema(rawOutput) {
         if (cols.length !== headers.length) continue;
         var db = cols[dbIdx] || 'default';
         var table = cols[tableIdx] || '';
-        if (!schema[db]) schema[db] = [];
-        if (table) schema[db].push(table);
+        var column = columnIdx >= 0 ? (cols[columnIdx] || '') : '';
+        if (!schema[db]) schema[db] = { tables: {} };
+        if (!table) continue;
+        if (!schema[db].tables[table]) schema[db].tables[table] = [];
+        if (column && schema[db].tables[table].indexOf(column) < 0) {
+            schema[db].tables[table].push(column);
+        }
     }
-    Object.keys(schema).forEach(function (dbName) {
-        schema[dbName].sort(function (a, b) { return a.localeCompare(b); });
+    return normalizeWebshellDbSchema(schema);
+}
+
+function parseWebshellDbColumns(rawOutput) {
+    var text = String(rawOutput || '').trim();
+    if (!text) return [];
+    var lines = text.split(/\r?\n/).filter(function (line) {
+        return line && line.trim() && !/^\(\d+\s+rows?\)$/i.test(line.trim()) && !/^[-+\s|]+$/.test(line.trim());
     });
-    return schema;
+    if (lines.length < 2) return [];
+    var delimiter = lines[0].indexOf('\t') >= 0 ? '\t' : (lines[0].indexOf('|') >= 0 ? '|' : '');
+    if (!delimiter) {
+        if (String(lines[0] || '').trim().toLowerCase() !== 'column_name') return [];
+        var plainColumns = [];
+        for (var p = 1; p < lines.length; p++) {
+            var plainName = String(lines[p] || '').trim();
+            if (!plainName || plainColumns.indexOf(plainName) >= 0) continue;
+            plainColumns.push(plainName);
+        }
+        return plainColumns;
+    }
+    var headers = lines[0].split(delimiter).map(function (s) { return String(s || '').trim().toLowerCase(); });
+    var colIdx = headers.indexOf('column_name');
+    if (colIdx < 0) return [];
+    var columns = [];
+    for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(delimiter).map(function (s) { return String(s || '').trim(); });
+        if (cols.length !== headers.length) continue;
+        var name = cols[colIdx] || '';
+        if (!name || columns.indexOf(name) >= 0) continue;
+        columns.push(name);
+    }
+    return columns;
+}
+
+function parseWebshellDbTableColumns(rawOutput) {
+    var text = String(rawOutput || '').trim();
+    if (!text) return {};
+    var lines = text.split(/\r?\n/).filter(function (line) {
+        return line && line.trim() && !/^\(\d+\s+rows?\)$/i.test(line.trim()) && !/^[-+\s|]+$/.test(line.trim());
+    });
+    if (lines.length < 2) return {};
+    var delimiter = lines[0].indexOf('\t') >= 0 ? '\t' : (lines[0].indexOf('|') >= 0 ? '|' : '');
+    if (!delimiter) return {};
+    var headers = lines[0].split(delimiter).map(function (s) { return String(s || '').trim().toLowerCase(); });
+    var tableIdx = headers.indexOf('table_name');
+    var colIdx = headers.indexOf('column_name');
+    if (tableIdx < 0 || colIdx < 0) return {};
+    var tableColumns = {};
+    for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(delimiter).map(function (s) { return String(s || '').trim(); });
+        if (cols.length !== headers.length) continue;
+        var tableName = cols[tableIdx] || '';
+        var colName = cols[colIdx] || '';
+        if (!tableName || !colName) continue;
+        if (!tableColumns[tableName]) tableColumns[tableName] = [];
+        if (tableColumns[tableName].indexOf(colName) >= 0) continue;
+        tableColumns[tableName].push(colName);
+    }
+    return tableColumns;
+}
+
+function normalizeWebshellDbSchema(rawSchema) {
+    if (!rawSchema || typeof rawSchema !== 'object') return {};
+    var normalized = {};
+    Object.keys(rawSchema).forEach(function (dbName) {
+        var dbEntry = rawSchema[dbName];
+        var tableMap = {};
+
+        if (Array.isArray(dbEntry)) {
+            dbEntry.forEach(function (tableName) {
+                var t = String(tableName || '').trim();
+                if (!t) return;
+                if (!tableMap[t]) tableMap[t] = [];
+            });
+        } else if (dbEntry && typeof dbEntry === 'object') {
+            var tablesSource = (dbEntry.tables && typeof dbEntry.tables === 'object') ? dbEntry.tables : dbEntry;
+            Object.keys(tablesSource).forEach(function (tableName) {
+                if (tableName === 'tables') return;
+                var t = String(tableName || '').trim();
+                if (!t) return;
+                var rawColumns = tablesSource[tableName];
+                var columns = Array.isArray(rawColumns) ? rawColumns : [];
+                var uniqColumns = [];
+                columns.forEach(function (colName) {
+                    var c = String(colName || '').trim();
+                    if (!c || uniqColumns.indexOf(c) >= 0) return;
+                    uniqColumns.push(c);
+                });
+                uniqColumns.sort(function (a, b) { return a.localeCompare(b); });
+                tableMap[t] = uniqColumns;
+            });
+        }
+
+        var sortedTables = {};
+        Object.keys(tableMap).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (tableName) {
+            sortedTables[tableName] = tableMap[tableName];
+        });
+        normalized[dbName] = { tables: sortedTables };
+    });
+    return normalized;
 }
 
 function simplifyWebshellAiError(rawMessage) {
@@ -1549,6 +1691,15 @@ function selectWebshell(id, stateReady) {
     var dbPassEl = document.getElementById('webshell-db-pass');
     var dbNameEl = document.getElementById('webshell-db-name');
     var dbSqliteEl = document.getElementById('webshell-db-sqlite-path');
+    var dbColumnsLoading = {};
+    var dbColumnsBatchLoading = {};
+    var dbColumnsBatchLoaded = {};
+
+    function resetDbColumnLoadCache() {
+        dbColumnsLoading = {};
+        dbColumnsBatchLoading = {};
+        dbColumnsBatchLoaded = {};
+    }
 
     function setDbActionButtonsDisabled(disabled) {
         if (dbRunBtn) dbRunBtn.disabled = disabled;
@@ -1599,6 +1750,7 @@ function selectWebshell(id, stateReady) {
                     saveWebshellDbState(conn, state);
                     applyActiveDbProfileToForm();
                     renderDbProfileTabs();
+                    resetDbColumnLoadCache();
                     renderDbSchemaTree();
                     return;
                 }
@@ -1623,6 +1775,7 @@ function selectWebshell(id, stateReady) {
                     saveWebshellDbState(conn, state);
                     applyActiveDbProfileToForm();
                     renderDbProfileTabs();
+                    resetDbColumnLoadCache();
                     renderDbSchemaTree();
                 }
             });
@@ -1632,8 +1785,15 @@ function selectWebshell(id, stateReady) {
     function renderDbSchemaTree() {
         if (!dbSchemaTreeEl) return;
         var cfg = getWebshellDbConfig(conn);
-        var schema = (cfg && cfg.schema && typeof cfg.schema === 'object') ? cfg.schema : {};
+        var schema = normalizeWebshellDbSchema((cfg && cfg.schema && typeof cfg.schema === 'object') ? cfg.schema : {});
         var dbs = Object.keys(schema).sort(function (a, b) { return a.localeCompare(b); });
+        var openTableKeys = {};
+        dbSchemaTreeEl.querySelectorAll('.webshell-db-table-node[open]').forEach(function (node) {
+            var openDb = node.getAttribute('data-db') || '';
+            var openTable = node.getAttribute('data-table') || '';
+            if (!openDb || !openTable) return;
+            openTableKeys[openDb + '::' + openTable] = true;
+        });
         if (!dbs.length) {
             dbSchemaTreeEl.innerHTML = '<div class="webshell-empty">' + escapeHtml(wsT('webshell.dbNoSchema') || '暂无数据库结构，请先加载') + '</div>';
             return;
@@ -1641,13 +1801,29 @@ function selectWebshell(id, stateReady) {
         var selectedDb = (cfg.selectedDatabase || '').trim();
         var html = '';
         dbs.forEach(function (dbName) {
-            var tables = schema[dbName] || [];
+            var tables = (schema[dbName] && schema[dbName].tables) ? schema[dbName].tables : {};
+            var tableNames = Object.keys(tables).sort(function (a, b) { return a.localeCompare(b); });
             var isActive = selectedDb && selectedDb === dbName;
             html += '<details class="webshell-db-group"' + (isActive ? ' open' : '') + '>';
-            html += '<summary class="webshell-db-group-title" data-db="' + escapeHtml(dbName) + '"><span class="webshell-db-icon">🗄</span><span>' + escapeHtml(dbName) + '</span><span class="webshell-db-count">' + tables.length + '</span></summary>';
+            html += '<summary class="webshell-db-group-title" data-db="' + escapeHtml(dbName) + '" title="' + escapeHtml(dbName) + '"><span class="webshell-db-icon">🗄</span><span class="webshell-db-label">' + escapeHtml(dbName) + '</span><span class="webshell-db-count">' + tableNames.length + '</span></summary>';
             html += '<div class="webshell-db-group-items">';
-            tables.forEach(function (tableName) {
-                html += '<button type="button" class="webshell-db-table-item" data-db="' + escapeHtml(dbName) + '" data-table="' + escapeHtml(tableName) + '"><span class="webshell-db-icon">📄</span><span>' + escapeHtml(tableName) + '</span></button>';
+            tableNames.forEach(function (tableName) {
+                var columns = Array.isArray(tables[tableName]) ? tables[tableName] : [];
+                var columnCountText = columns.length > 0 ? String(columns.length) : '-';
+                var tableKey = dbName + '::' + tableName;
+                var tableOpen = !!openTableKeys[tableKey];
+                html += '<details class="webshell-db-table-node" data-db="' + escapeHtml(dbName) + '" data-table="' + escapeHtml(tableName) + '" data-columns-loaded="' + (columns.length ? '1' : '0') + '"' + (tableOpen ? ' open' : '') + '>';
+                html += '<summary class="webshell-db-table-item" data-db="' + escapeHtml(dbName) + '" data-table="' + escapeHtml(tableName) + '" title="' + escapeHtml(tableName) + '"><span class="webshell-db-icon">📄</span><span class="webshell-db-label">' + escapeHtml(tableName) + '</span><span class="webshell-db-count">' + escapeHtml(columnCountText) + '</span></summary>';
+                if (columns.length) {
+                    html += '<div class="webshell-db-column-list">';
+                    columns.forEach(function (columnName) {
+                        html += '<button type="button" class="webshell-db-column-item" data-db="' + escapeHtml(dbName) + '" data-table="' + escapeHtml(tableName) + '" data-column="' + escapeHtml(columnName) + '" title="' + escapeHtml(columnName) + '"><span class="webshell-db-icon">🧱</span><span class="webshell-db-label">' + escapeHtml(columnName) + '</span></button>';
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="webshell-db-column-empty">' + escapeHtml(wsT('webshell.dbNoColumns') || '暂无列信息') + '</div>';
+                }
+                html += '</details>';
             });
             html += '</div></details>';
         });
@@ -1659,6 +1835,7 @@ function selectWebshell(id, stateReady) {
                 cfg.selectedDatabase = el.getAttribute('data-db') || '';
                 saveWebshellDbConfig(conn, cfg);
                 if (dbNameEl && cfg.type !== 'sqlite') dbNameEl.value = cfg.selectedDatabase;
+                ensureDbDatabaseColumns(cfg.selectedDatabase);
             });
         });
         dbSchemaTreeEl.querySelectorAll('.webshell-db-table-item').forEach(function (el) {
@@ -1678,7 +1855,126 @@ function selectWebshell(id, stateReady) {
                     dbSqlEl.value = 'SELECT * FROM ' + tableRef + ' ORDER BY 1 DESC LIMIT 20;';
                     webshellDbCollectConfig(conn);
                 }
+                ensureDbTableColumns(dbName, table);
             });
+        });
+        dbSchemaTreeEl.querySelectorAll('.webshell-db-table-node').forEach(function (node) {
+            node.addEventListener('toggle', function () {
+                if (!node.open) return;
+                var dbName = node.getAttribute('data-db') || '';
+                var table = node.getAttribute('data-table') || '';
+                if (!dbName || !table) return;
+                ensureDbTableColumns(dbName, table);
+            });
+        });
+        dbSchemaTreeEl.querySelectorAll('.webshell-db-column-item').forEach(function (el) {
+            el.addEventListener('click', function (evt) {
+                evt.preventDefault();
+                evt.stopPropagation();
+                var table = el.getAttribute('data-table') || '';
+                var column = el.getAttribute('data-column') || '';
+                var dbName = el.getAttribute('data-db') || '';
+                if (!table || !column) return;
+                var cfg = webshellDbCollectConfig(conn);
+                cfg.selectedDatabase = dbName;
+                if (cfg.type !== 'sqlite') cfg.database = dbName;
+                saveWebshellDbConfig(conn, cfg);
+                if (dbNameEl && cfg.type !== 'sqlite') dbNameEl.value = dbName;
+                var tableRef = cfg.type === 'sqlite'
+                    ? webshellDbQuoteIdentifier(cfg.type, table)
+                    : webshellDbQuoteIdentifier(cfg.type, dbName) + '.' + webshellDbQuoteIdentifier(cfg.type, table);
+                if (dbSqlEl) {
+                    dbSqlEl.value = 'SELECT ' + webshellDbQuoteIdentifier(cfg.type, column) + ' FROM ' + tableRef + ' LIMIT 20;';
+                    webshellDbCollectConfig(conn);
+                }
+            });
+        });
+        var autoDb = selectedDb || dbs[0] || '';
+        if (autoDb) ensureDbDatabaseColumns(autoDb);
+    }
+
+    function ensureDbTableColumns(dbName, tableName) {
+        if (!dbName || !tableName || webshellRunning) return;
+        var loadKey = (conn && conn.id ? conn.id : 'local') + '::' + dbName + '::' + tableName;
+        if (dbColumnsLoading[loadKey]) return;
+        webshellDbCollectConfig(conn);
+        var cfg = getWebshellDbConfig(conn);
+        var schema = normalizeWebshellDbSchema((cfg && cfg.schema && typeof cfg.schema === 'object') ? cfg.schema : {});
+        if (!schema[dbName]) return;
+        if (!schema[dbName].tables[tableName]) return;
+        if (Array.isArray(schema[dbName].tables[tableName]) && schema[dbName].tables[tableName].length > 0) return;
+
+        var built = buildWebshellDbColumnsCommand(cfg, dbName, tableName);
+        if (!built.command) return;
+        dbColumnsLoading[loadKey] = true;
+        webshellRunning = true;
+        setDbActionButtonsDisabled(true);
+        execWebshellCommand(conn, built.command).then(function (out) {
+            var parsed = parseWebshellDbExecOutput(out);
+            var success = parsed.rc === 0 || (parsed.rc == null && parsed.output && !/error|failed|denied|unknown|not found|access/i.test(parsed.output));
+            if (!success) return;
+            var columns = parseWebshellDbColumns(parsed.output);
+            if (!columns.length) return;
+            var nextCfg = getWebshellDbConfig(conn);
+            var nextSchema = normalizeWebshellDbSchema((nextCfg && nextCfg.schema && typeof nextCfg.schema === 'object') ? nextCfg.schema : {});
+            if (!nextSchema[dbName]) nextSchema[dbName] = { tables: {} };
+            if (!nextSchema[dbName].tables[tableName]) nextSchema[dbName].tables[tableName] = [];
+            nextSchema[dbName].tables[tableName] = columns;
+            nextCfg.schema = nextSchema;
+            saveWebshellDbConfig(conn, nextCfg);
+            renderDbSchemaTree();
+        }).catch(function () {
+            // ignore single-table column load errors to avoid interrupting main flow
+        }).finally(function () {
+            delete dbColumnsLoading[loadKey];
+            webshellRunning = false;
+            setDbActionButtonsDisabled(false);
+        });
+    }
+
+    function ensureDbDatabaseColumns(dbName) {
+        if (!dbName || webshellRunning) return;
+        webshellDbCollectConfig(conn);
+        var cfg = getWebshellDbConfig(conn);
+        var schema = normalizeWebshellDbSchema((cfg && cfg.schema && typeof cfg.schema === 'object') ? cfg.schema : {});
+        if (!schema[dbName] || !schema[dbName].tables) return;
+        var hasUnknown = Object.keys(schema[dbName].tables).some(function (tableName) {
+            var cols = schema[dbName].tables[tableName];
+            return !Array.isArray(cols) || cols.length === 0;
+        });
+        if (!hasUnknown) return;
+
+        var batchKey = (conn && conn.id ? conn.id : 'local') + '::' + (cfg.type || 'mysql') + '::' + dbName;
+        if (dbColumnsBatchLoading[batchKey] || dbColumnsBatchLoaded[batchKey]) return;
+        var built = buildWebshellDbColumnsByDatabaseCommand(cfg, dbName);
+        if (!built.command) return;
+
+        dbColumnsBatchLoading[batchKey] = true;
+        webshellRunning = true;
+        setDbActionButtonsDisabled(true);
+        execWebshellCommand(conn, built.command).then(function (out) {
+            var parsed = parseWebshellDbExecOutput(out);
+            var success = parsed.rc === 0 || (parsed.rc == null && parsed.output && !/error|failed|denied|unknown|not found|access/i.test(parsed.output));
+            if (!success) return;
+            var tableColumns = parseWebshellDbTableColumns(parsed.output);
+            if (!Object.keys(tableColumns).length) return;
+
+            var nextCfg = getWebshellDbConfig(conn);
+            var nextSchema = normalizeWebshellDbSchema((nextCfg && nextCfg.schema && typeof nextCfg.schema === 'object') ? nextCfg.schema : {});
+            if (!nextSchema[dbName]) nextSchema[dbName] = { tables: {} };
+            Object.keys(tableColumns).forEach(function (tableName) {
+                nextSchema[dbName].tables[tableName] = tableColumns[tableName];
+            });
+            nextCfg.schema = nextSchema;
+            saveWebshellDbConfig(conn, nextCfg);
+            renderDbSchemaTree();
+        }).catch(function () {
+            // ignore batch column load errors to avoid interrupting main flow
+        }).finally(function () {
+            delete dbColumnsBatchLoading[batchKey];
+            dbColumnsBatchLoaded[batchKey] = true;
+            webshellRunning = false;
+            setDbActionButtonsDisabled(false);
         });
     }
 
@@ -1692,6 +1988,7 @@ function selectWebshell(id, stateReady) {
             return;
         }
         var cfg = webshellDbCollectConfig(conn);
+        resetDbColumnLoadCache();
         var built = buildWebshellDbSchemaCommand(cfg);
         if (!built.command) {
             webshellDbSetOutput(built.error || (wsT('webshell.dbSchemaFailed') || '加载数据库结构失败'), true);
@@ -1794,11 +2091,15 @@ function selectWebshell(id, stateReady) {
         cfg.selectedDatabase = '';
         cfg.schema = {};
         saveWebshellDbConfig(conn, cfg);
+        resetDbColumnLoadCache();
         renderDbSchemaTree();
     });
     ['webshell-db-host', 'webshell-db-port', 'webshell-db-user', 'webshell-db-pass', 'webshell-db-name', 'webshell-db-sqlite-path'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.addEventListener('change', function () { webshellDbCollectConfig(conn); });
+        if (el) el.addEventListener('change', function () {
+            webshellDbCollectConfig(conn);
+            resetDbColumnLoadCache();
+        });
     });
     if (dbSqlEl) dbSqlEl.addEventListener('change', function () { webshellDbCollectConfig(conn); });
     if (dbRunBtn) dbRunBtn.addEventListener('click', function () { runDbQuery(false); });
