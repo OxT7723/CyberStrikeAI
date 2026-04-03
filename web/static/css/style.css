@@ -1577,12 +1577,12 @@ header {
 .message-meta-footer {
     display: flex;
     flex-direction: row;
-    align-items: center;
-    gap: 10px;
+    align-items: center; /* 与时间戳、删除钮统一垂直居中 */
+    gap: 8px;
     margin-top: 6px;
     flex-wrap: wrap;
     width: 100%;
-    min-height: 22px;
+    min-height: 28px;
 }
 
 .message.user .message-meta-footer {
@@ -1626,6 +1626,20 @@ header {
     opacity: 1;
     outline: 2px solid var(--accent-color, #0066ff);
     outline-offset: 1px;
+}
+
+/* 与删除钮同一行时：去掉时间戳默认 margin-top，避免文字偏低、图标显「高」 */
+.message-meta-footer .message-time {
+    margin-top: 0;
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    line-height: 1.3;
+}
+
+.message-delete-turn-btn svg {
+    display: block;
+    flex-shrink: 0;
 }
 
 @media (hover: none) {
