@@ -959,6 +959,57 @@ async function applySettings() {
     }
 }
 
+// 测试OpenAI连接
+async function testOpenAIConnection() {
+    const btn = document.getElementById('test-openai-btn');
+    const resultEl = document.getElementById('test-openai-result');
+
+    const baseUrl = document.getElementById('openai-base-url').value.trim();
+    const apiKey = document.getElementById('openai-api-key').value.trim();
+    const model = document.getElementById('openai-model').value.trim();
+
+    if (!apiKey || !model) {
+        resultEl.style.color = 'var(--danger-color, #e53e3e)';
+        resultEl.textContent = typeof window.t === 'function' ? window.t('settingsBasic.testFillRequired') : '请先填写 API Key 和模型';
+        return;
+    }
+
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity = '0.5';
+    resultEl.style.color = 'var(--text-muted, #888)';
+    resultEl.textContent = typeof window.t === 'function' ? window.t('settingsBasic.testing') : '测试中...';
+
+    try {
+        const response = await apiFetch('/api/config/test-openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                base_url: baseUrl,
+                api_key: apiKey,
+                model: model
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            resultEl.style.color = 'var(--success-color, #38a169)';
+            const latency = result.latency_ms ? ` (${result.latency_ms}ms)` : '';
+            const modelInfo = result.model ? ` [${result.model}]` : '';
+            resultEl.textContent = (typeof window.t === 'function' ? window.t('settingsBasic.testSuccess') : '连接成功') + modelInfo + latency;
+        } else {
+            resultEl.style.color = 'var(--danger-color, #e53e3e)';
+            resultEl.textContent = (typeof window.t === 'function' ? window.t('settingsBasic.testFailed') : '连接失败') + ': ' + (result.error || '未知错误');
+        }
+    } catch (error) {
+        resultEl.style.color = 'var(--danger-color, #e53e3e)';
+        resultEl.textContent = (typeof window.t === 'function' ? window.t('settingsBasic.testError') : '测试出错') + ': ' + error.message;
+    } finally {
+        btn.style.pointerEvents = '';
+        btn.style.opacity = '';
+    }
+}
+
 // 保存工具配置（独立函数，用于MCP管理页面）
 async function saveToolsConfig() {
     try {

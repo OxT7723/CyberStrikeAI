@@ -1302,7 +1302,13 @@
     "maxRetriesHint": "最大重试次数（默认 3），遇到速率限制或服务器错误时自动重试",
     "retryDelay": "重试间隔（毫秒）",
     "retryDelayPlaceholder": "1000",
-    "retryDelayHint": "重试间隔毫秒数（默认 1000），每次重试会递增延迟"
+    "retryDelayHint": "重试间隔毫秒数（默认 1000），每次重试会递增延迟",
+    "testConnection": "测试连接",
+    "testFillRequired": "请先填写 API Key 和模型",
+    "testing": "测试中...",
+    "testSuccess": "连接成功",
+    "testFailed": "连接失败",
+    "testError": "测试出错"
   },
   "settingsTerminal": {
     "title": "终端",

@@ -1302,7 +1302,13 @@
     "maxRetriesHint": "Retries on rate limit or server error",
     "retryDelay": "Retry delay (ms)",
     "retryDelayPlaceholder": "1000",
-    "retryDelayHint": "Delay between retries (ms)"
+    "retryDelayHint": "Delay between retries (ms)",
+    "testConnection": "Test Connection",
+    "testFillRequired": "Please fill in API Key and Model first",
+    "testing": "Testing connection...",
+    "testSuccess": "Connection successful",
+    "testFailed": "Connection failed",
+    "testError": "Test error"
   },
   "settingsTerminal": {
     "title": "Terminal",

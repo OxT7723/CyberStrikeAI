@@ -1371,6 +1371,10 @@
                                             <label for="openai-model"><span data-i18n="settingsBasic.model">模型</span> <span style="color: red;">*</span></label>
                                             <input type="text" id="openai-model" data-i18n="settingsBasic.modelPlaceholder" data-i18n-attr="placeholder" placeholder="gpt-4" required />
                                         </div>
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                                            <a href="javascript:void(0)" id="test-openai-btn" onclick="testOpenAIConnection()" style="font-size: 0.8125rem; color: var(--accent-color, #3182ce); text-decoration: none; cursor: pointer; user-select: none;" data-i18n="settingsBasic.testConnection">测试连接</a>
+                                            <span id="test-openai-result" style="font-size: 0.8125rem;"></span>
+                                        </div>
                                     </div>
                                 </div>
 
