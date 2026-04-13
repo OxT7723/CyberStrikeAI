@@ -1524,8 +1524,7 @@ header {
     justify-content: center;
     gap: 6px;
     padding: 8px 14px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
+    background: #ffffff;
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 20px;
     color: #666;
@@ -2083,7 +2082,6 @@ header {
     overflow: hidden;
     display: none;
     z-index: 15;
-    backdrop-filter: blur(6px);
     animation: mentionFadeIn 0.15s ease-out;
     box-sizing: border-box;
 }
@@ -2270,9 +2268,7 @@ header {
 .login-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(245, 245, 245, 0.85);
     display: none;
     align-items: center;
     justify-content: center;
@@ -2428,7 +2424,6 @@ header {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
     overflow: auto;
     animation: fadeIn 0.2s ease-in;
 }
@@ -9807,8 +9802,7 @@ header {
     font-size: 0.92rem;
     font-weight: 600;
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(6px);
+    background: #ffffff;
 }
 .webshell-memo-input {
     flex: 1;
@@ -10726,8 +10720,7 @@ header {
     flex-shrink: 0;
     padding: 12px 24px;
     border-bottom: 1px solid rgba(0,0,0,0.06);
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(10px);
+    background: #ffffff;
     box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset;
 }
 
@@ -12097,7 +12090,6 @@ header {
     display: flex;
     flex-direction: column;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(20px);
     text-align: left;
 }
 
@@ -12156,7 +12148,6 @@ header {
     display: flex;
     flex-direction: column;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(20px);
 }
 
 @keyframes slideUp {
